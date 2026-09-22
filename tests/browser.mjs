@@ -1,0 +1,60 @@
+import { chromium } from '@playwright/test';
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+
+await mkdir('.artifacts', { recursive: true });
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
+try {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1050 } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const external = [];
+  page.on('request', request => { if (!request.url().startsWith('http://127.0.0.1:4173') && !request.url().startsWith('data:')) external.push(request.url()); });
+  await page.goto('http://127.0.0.1:4173');
+  await page.screenshot({ path: '.artifacts/intro-desktop.png', fullPage: true });
+  await page.getByRole('button', { name: 'Explore your cake' }).click();
+  await page.locator('canvas').waitFor();
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: '.artifacts/cake-desktop.png', fullPage: true });
+  const canvas = await page.locator('canvas').boundingBox();
+  await page.mouse.move(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(canvas.x + canvas.width / 2 + 110, canvas.y + canvas.height / 2, { steps: 10 });
+  await page.mouse.up();
+  assert.equal(await page.getByRole('button', { name: 'Close video' }).count(), 0, 'Dragging must not select a slice');
+  // Real raycast selection from the cake, rather than only the accessible list.
+  await page.mouse.click(canvas.x + canvas.width / 2 + 45, canvas.y + canvas.height / 2);
+  await page.getByRole('button', { name: 'Close video' }).waitFor();
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /Red velvet/ }).click();
+  assert.equal(await page.getByRole('heading', { name: 'Red velvet' }).count(), 1);
+  await page.screenshot({ path: '.artifacts/selected-desktop.png', fullPage: true });
+  await page.keyboard.press('Escape');
+  assert.equal(await page.getByRole('button', { name: /Red velvet/ }).evaluate(el => el === document.activeElement), true);
+  await page.getByRole('button', { name: /Nutty chocolate/ }).click();
+  assert.equal(await page.getByRole('heading', { name: 'Nutty chocolate' }).count(), 1);
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: '.artifacts/cake-mobile.png', fullPage: true });
+  await page.getByRole('button', { name: /Red velvet/ }).click();
+  await page.getByRole('dialog', { name: 'Red velvet' }).waitFor();
+  await page.screenshot({ path: '.artifacts/selected-mobile.png', fullPage: true });
+  await page.keyboard.press('Tab');
+  assert.equal(await page.getByRole('button', { name: 'Close video' }).evaluate(el => el === document.activeElement), true);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'No horizontal overflow');
+  await page.keyboard.press('Escape');
+  assert.deepEqual(errors, []);
+  assert.deepEqual(external, [], 'All resources must be local');
+  const fallback = await context.newPage();
+  await fallback.addInitScript(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function(type, ...args) { if (type.includes('webgl')) return null; return original.call(this, type, ...args); };
+  });
+  await fallback.goto('http://127.0.0.1:4173');
+  await fallback.getByRole('button', { name: 'Explore your cake' }).click();
+  await fallback.getByText('Your nine slices are waiting below.').waitFor();
+  await fallback.getByRole('button', { name: /Nutty chocolate/ }).click();
+  await fallback.getByRole('heading', { name: 'Nutty chocolate' }).waitFor();
+  console.log('Browser checks passed: 3D click/drag, desktop, mobile, focus, WebGL fallback, local assets.');
+} finally { await browser.close(); }
