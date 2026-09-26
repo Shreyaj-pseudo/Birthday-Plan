@@ -1,113 +1,191 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, Check, Heart, Play, X } from '@phosphor-icons/react';
 import { birthday } from './content';
 import { VideoPlayer } from './VideoPlayer';
-import { ArrowUpRight, ArrowLeft, Check, X, Heart, Asterisk } from '@phosphor-icons/react';
+
 const Cake = lazy(() => import('./Cake'));
 const storageKey = 'nine-slices-watched-v1';
-function readWatched(): string[] { try { const value: unknown = JSON.parse(localStorage.getItem(storageKey) || '[]'); return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string' && birthday.slices.some(s => s.id === id)) : []; } catch { return []; } }
+
+function readWatched(): string[] {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    return Array.isArray(stored)
+      ? stored.filter((id): id is string => typeof id === 'string' && birthday.slices.some(slice => slice.id === id))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function flavorPosition(index: number) {
+  const a = Math.PI / 2 - index * (Math.PI * 2 / 9);
+  const x = .5 + .29 * Math.cos(a);
+  const y = .5 - .29 * Math.sin(a);
+  const size = 3.2;
+  const p = (n: number) => `${((n - .5 / size) / (1 - 1 / size)) * 100}%`;
+  return { backgroundPosition: `${p(x)} ${p(y)}` };
+}
+
 export default function App() {
-  const [stage, setStage] = useState<'intro'|'cake'>('intro');
-  const [selected, setSelected] = useState<string|null>(null);
+  const [stage, setStage] = useState<'intro' | 'cake'>('intro');
+  const [transition, setTransition] = useState<'idle' | 'cover' | 'uncover'>('idle');
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
   const [watched, setWatched] = useState<string[]>(readWatched);
   const [reduced, setReduced] = useState(false);
-  const [mobile, setMobile] = useState(false);
+  const [small, setSmall] = useState(false);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const titleRef = useRef<HTMLHeadingElement>(null);
-  const panelRef = useRef<HTMLElement>(null);
-  const sliceRefs = useRef<Record<string, HTMLButtonElement|null>>({});
-  const active = birthday.slices.find(s => s.id === selected);
+  const noteOpener = useRef<HTMLElement | null>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const sliceRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const active = birthday.slices.find(slice => slice.id === selected);
+
   useEffect(() => {
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
-    const narrow = matchMedia('(max-width: 767px)');
-    const update = () => { setReduced(motion.matches); setMobile(narrow.matches); };
-    update(); motion.addEventListener('change',update); narrow.addEventListener('change',update);
-    return () => { motion.removeEventListener('change',update); narrow.removeEventListener('change',update); };
-  },[]);
-  useEffect(() => { try { localStorage.setItem(storageKey,JSON.stringify(watched)); } catch { /* Presentation still works without storage. */ } },[watched]);
-  useEffect(() => { if (selected) closeRef.current?.focus(); },[selected]);
-  useEffect(() => {
-    if (!selected || !mobile) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previous; };
-  },[selected,mobile]);
-  function close() { const id = selected; setSelected(null); if(id) requestAnimationFrame(() => sliceRefs.current[id]?.focus()); }
-  useEffect(() => {
-    const handle = (e: KeyboardEvent) => {
-      if (!selected) return;
-      if (e.key === 'Escape') { e.preventDefault(); close(); }
-      if (e.key === 'Tab' && mobile) {
-        const elements = panelRef.current?.querySelectorAll<HTMLElement>('button, video[controls], [tabindex="0"]');
-        if (!elements?.length) return;
-        const first = elements[0]; const last = elements[elements.length-1];
-        if(e.shiftKey && document.activeElement===first) { e.preventDefault(); last.focus(); }
-        else if(!e.shiftKey && document.activeElement===last) { e.preventDefault(); first.focus(); }
-      }
+    const width = matchMedia('(max-width: 900px)');
+    const update = () => { setReduced(motion.matches); setSmall(width.matches); };
+    update();
+    motion.addEventListener('change', update);
+    width.addEventListener('change', update);
+    return () => {
+      motion.removeEventListener('change', update);
+      width.removeEventListener('change', update);
+      timers.current.forEach(clearTimeout);
     };
-    window.addEventListener('keydown',handle); return () => window.removeEventListener('keydown',handle);
-  },[selected,mobile]);
-  function explore() { setStage('cake'); requestAnimationFrame(() => titleRef.current?.focus()); }
-  const backgroundInert = mobile && !!active;
+  }, []);
+
+  useEffect(() => {
+    try { localStorage.setItem(storageKey, JSON.stringify(watched)); }
+    catch { /* The presentation still works if storage is disabled. */ }
+  }, [watched]);
+
+  useEffect(() => { if (active || noteOpen) closeRef.current?.focus(); }, [active, noteOpen]);
+
+  useEffect(() => {
+    const panel = dialogRef.current;
+    if ((!active && !noteOpen) || !panel || reduced) return;
+    const motion = panel.animate(
+      [{ transform: 'translateX(100%)' }, { transform: 'translateX(0)' }],
+      { duration: 460, easing: 'cubic-bezier(.16, 1, .3, 1)' },
+    );
+    return () => motion.cancel();
+  }, [active, noteOpen, reduced]);
+
+  function changeStage(next: 'intro' | 'cake') {
+    if (next === stage || transition !== 'idle') return;
+    setSelected(null);
+    setNoteOpen(false);
+    if (reduced) { setStage(next); return; }
+    setTransition('cover');
+    timers.current.push(setTimeout(() => {
+      setStage(next);
+      setTransition('uncover');
+    }, 480));
+    timers.current.push(setTimeout(() => setTransition('idle'), 1080));
+  }
+
+  function closePanel() {
+    const lastId = selected;
+    setSelected(null);
+    setNoteOpen(false);
+    requestAnimationFrame(() => {
+      if (lastId) sliceRefs.current[lastId]?.focus();
+      else noteOpener.current?.focus();
+    });
+  }
+
+  function openNote() {
+    noteOpener.current = document.activeElement as HTMLElement;
+    setNoteOpen(true);
+  }
+
+  useEffect(() => {
+    if (!noteOpen && !active) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') { e.preventDefault(); closePanel(); }
+      if (e.key === 'Tab') {
+        const focusable = dialogRef.current?.querySelectorAll<HTMLElement>('button, video[controls]');
+        if (!focusable?.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [active, noteOpen]);
+
+  const obscured = !!active || noteOpen;
   return (
-    <div className={`app-shell ${stage === 'intro' ? 'showing-intro' : ''}`}>
-      <header className="site-header" inert={backgroundInert}>
-        <button className="wordmark" onClick={() => { setSelected(null); setStage('intro'); }}>
-          nine slices<Asterisk className="wordmark-star" size={24} weight="light" aria-hidden="true" />
-        </button>
-        <span className="header-note">A birthday made of love</span>
-        <span className="edition">For {birthday.recipient}<Heart size={17} weight="light" aria-hidden="true" /></span>
+    <div className="experience">
+      <header className="site-header" inert={obscured}>
+        <button className="wordmark" onClick={() => changeStage('intro')} aria-label="Nine slices, return to the beginning">nine slices<span aria-hidden="true">✳</span></button>
+        <span className="header-center">A birthday, told by the people who love you</span>
+        <button className="header-action" onClick={openNote}>A message from me <Play size={13} weight="fill" aria-hidden="true" /></button>
       </header>
 
       {stage === 'intro' ? (
-        <main className="intro">
-          <div className="intro-copy">
-            <p className="eyebrow">Today is all about you</p>
-            <h1>Happy birthday, my favorite person.</h1>
-            <p className="intro-description">Your friends each chose a slice of cake for you. Here are their stories, gathered in one place.</p>
-            <button className="primary-button" onClick={explore}>Explore your cake<ArrowUpRight size={21} aria-hidden="true" /></button>
+        <main className="landing" inert={obscured}>
+          <div className="landing-photo" aria-hidden="true" />
+          <div className="landing-vignette" aria-hidden="true" />
+          <div className="landing-copy">
+            <span className="overline">Made for you, with love</span>
+            <h1>One cake.<br /><em>Nine stories.</em><br />All yours.</h1>
+            <p>Each of your friends chose a slice that reminded them of you. Pick one and hear why.</p>
+            <div className="landing-actions">
+              <button className="primary-button" onClick={() => changeStage('cake')}>Explore your cake <ArrowRight size={20} aria-hidden="true" /></button>
+              <button className="secondary-button" onClick={openNote}><Play size={16} weight="fill" aria-hidden="true" /> Watch my message</button>
+            </div>
           </div>
-          <figure className="intro-film">
-            <VideoPlayer src={birthday.intro.video} poster={birthday.intro.poster} placeholderCover="/images/birthday-table.webp" label="Your birthday dedication" />
-            <figcaption className="film-caption"><span>But first, a few words from me.</span><Heart size={24} weight="light" aria-hidden="true" /></figcaption>
-          </figure>
+          <div className="landing-corner">Tonight is yours <Heart size={17} weight="light" aria-hidden="true" /></div>
         </main>
       ) : (
         <main className={`cake-page ${active ? 'has-selection' : ''}`}>
-          <div className="cake-heading" inert={backgroundInert}>
-            <h1 ref={titleRef} tabIndex={-1}>Everyone brought a little love.</h1>
-            <p>Nine friends. Nine slices.<br />Choose any flavor to hear why they picked it for you.</p>
-            <button className="text-button intro-back" onClick={() => { setSelected(null); setStage('intro'); }}><ArrowLeft size={17} aria-hidden="true" />Your opening message</button>
-          </div>
-          <div className="experience-grid">
-            <section className="cake-area" aria-label="Interactive birthday cake" inert={backgroundInert}>
-              <Suspense fallback={<div className="scene-loading">Setting the table…</div>}><Cake selected={selected} onSelect={setSelected} reduced={reduced} /></Suspense>
-            </section>
-            {active && <>
-              <div className="mobile-scrim" onClick={close} aria-hidden="true" />
-              <aside ref={panelRef} className="message-panel" role={mobile ? 'dialog' : 'region'} aria-modal={mobile || undefined} aria-labelledby="message-heading">
-                <div className="panel-top"><span>A message for you</span><button ref={closeRef} className="close-button" onClick={close} aria-label="Close video"><X size={21} aria-hidden="true" /></button></div>
-                <h2 id="message-heading">{active.flavor}</h2>
-                <p className="chosen-by">Chosen by <strong>{active.friend}</strong></p>
-                <VideoPlayer key={active.id} src={active.video} poster={active.poster} label={`${active.friend}: ${active.flavor}`} onEnded={() => setWatched(w => w.includes(active.id) ? w : [...w, active.id])} />
-                <p className="panel-note">Why this slice made them think of you.</p>
-                {watched.includes(active.id) && <span className="watched-label"><Check size={16} aria-hidden="true" />Watched. Yours to replay anytime.</span>}
-              </aside>
-            </>}
+          <div className="scene" inert={obscured}>
+            <div className="scene-background" aria-hidden="true" />
+            <div className="scene-topline">
+              <button className="scene-back" onClick={() => changeStage('intro')}><ArrowLeft size={18} aria-hidden="true" /> Back to the beginning</button>
+              <span>Choose whichever slice you like</span>
+            </div>
+            <div className="cake-spotlight">
+              <Suspense fallback={<div className="scene-loading">Preparing your cake…</div>}>
+                <Cake selected={selected} onSelect={setSelected} reduced={reduced} />
+              </Suspense>
+            </div>
+            <div className="scene-bottomline"><span>Drag to turn the cake. Click a slice to hear its story.</span><span>{watched.length} of 9 stories watched</span></div>
           </div>
 
-          <section className="slice-collection" aria-label="Choose a cake slice" inert={backgroundInert}>
-            <div className="collection-heading"><h2>Which one first?</h2><span aria-live="polite">{watched.length} of 9 stories watched</span></div>
-            <div className="slice-list">{birthday.slices.map(s => (
-              <button key={s.id} ref={node => { sliceRefs.current[s.id] = node; }} className={`slice-button ${selected === s.id ? 'selected' : ''}`} onClick={() => setSelected(s.id)} aria-pressed={selected === s.id}>
-                <span className="flavor-swatch" aria-hidden="true" style={{ background: `linear-gradient(to bottom, ${s.appearance.frosting} 0% 26%, ${s.appearance.sponge} 26% 44%, ${s.appearance.filling} 44% 54%, ${s.appearance.sponge} 54% 76%, ${s.appearance.filling} 76% 84%, ${s.appearance.sponge} 84%)` }} />
-                <span className="slice-text"><strong>{s.flavor}</strong><small>{s.friend}</small></span>
-                <span className="slice-arrow">{watched.includes(s.id) ? <Check size={17} aria-label="Watched" /> : <ArrowUpRight size={16} aria-hidden="true" />}</span>
-              </button>
-            ))}</div>
+          <section className="flavor-section" aria-label="Choose a cake slice" inert={obscured}>
+            <div className="flavor-heading"><div><span className="overline">The nine slices</span><h2>Where will you begin?</h2></div><button className="quiet-button" onClick={() => setWatched([])}>Reset watched stories</button></div>
+            <div className="flavor-list">
+              {birthday.slices.map((slice, index) => (
+                <button key={slice.id} ref={node => { sliceRefs.current[slice.id] = node; }} className={`flavor-card ${selected === slice.id ? 'selected' : ''}`} onClick={() => setSelected(slice.id)} aria-pressed={selected === slice.id}>
+                  <span className="flavor-photo" style={flavorPosition(index)} aria-hidden="true" />
+                  <span className="flavor-info"><strong>{slice.flavor}</strong></span>
+                  <span className="flavor-action">{watched.includes(slice.id) ? <Check size={19} aria-label="Watched" /> : <ArrowUpRight size={20} aria-hidden="true" />}</span>
+                </button>
+              ))}
+            </div>
           </section>
         </main>
       )}
-      <footer inert={backgroundInert}><span>With love, from all of us.</span>{stage === 'cake' && <button className="text-button" onClick={() => setWatched([])}>Reset watched stories</button>}</footer>
+
+      {obscured && <>
+        <div className="dialog-scrim" onClick={closePanel} aria-hidden="true" />
+        <aside className={`story-panel ${noteOpen ? 'opening-note' : ''}`} ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="story-heading">
+          <div className="panel-header"><span>{noteOpen ? 'Before the cake' : 'One of nine stories'}</span><button ref={closeRef} className="panel-close" onClick={closePanel} aria-label="Close video"><X size={23} aria-hidden="true" /></button></div>
+          {noteOpen ? <><h2 id="story-heading">A few words from me.</h2><p className="panel-description">A birthday message, just for you.</p><VideoPlayer src={birthday.intro.video} poster={birthday.intro.poster} placeholderCover="/images/candlelit-table.webp" label="Your birthday dedication" /><button className="panel-next" onClick={() => { setNoteOpen(false); changeStage('cake'); }}>Explore your cake <ArrowRight size={18} aria-hidden="true" /></button></> : active && <><h2 id="story-heading">{active.flavor}</h2><p className="panel-description">Chosen by <strong>{active.friend}</strong>, for you.</p><VideoPlayer key={active.id} src={active.video} poster={active.poster} label={`${active.friend}: ${active.flavor}`} onEnded={() => setWatched(current => current.includes(active.id) ? current : [...current, active.id])} /><p className="panel-ending">Some stories are best told over cake.</p>{watched.includes(active.id) && <p className="watched-note"><Check size={16} aria-hidden="true" /> Watched. You can come back anytime.</p>}</>}
+        </aside>
+      </>}
+      {transition !== 'idle' && <div className={`scene-curtain ${transition}`} aria-hidden="true"><span>nine slices</span></div>}
+      {small && <div className="laptop-hint" role="status">This birthday experience is made for a laptop screen.</div>}
     </div>
   );
 }

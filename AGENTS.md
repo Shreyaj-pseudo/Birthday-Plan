@@ -2,9 +2,9 @@
 
 ## Project Structure & Module Organization
 
-This is a local-first React and TypeScript birthday website built with Vite. `src/App.tsx` manages navigation, selection, and watched progress; `src/Cake.tsx` renders the Three.js cake through React Three Fiber; `src/VideoPlayer.tsx` handles playback and placeholders. Keep recipient details and the nine slice definitions in `src/content.ts`, and visual styling in `src/styles.css`.
+This is a local-first React and TypeScript birthday website built with Vite. `src/App.tsx` manages the landing, scene transition, selection, and watched progress; `src/Cake.tsx` renders nine photo-textured wedges through React Three Fiber; `src/VideoPlayer.tsx` handles playback and placeholders. Keep recipient details and the nine slice definitions in `src/content.ts`, and visual styling in `src/styles.css`.
 
-Store videos and optional posters in `public/videos/`. Component tests live in `src/App.test.tsx`; browser checks live in `tests/browser.mjs`. Generated `dist/`, `.artifacts/`, and `node_modules/` directories are ignored.
+Store videos and optional posters in `public/videos/`. Source photography is in `assets/source-images/`; runtime WebP files are in `public/images/`. Component tests live in `src/App.test.tsx`; browser checks live in `tests/browser.mjs`. Generated `dist/`, `.artifacts/`, and `node_modules/` directories are ignored.
 
 ## Build, Test, and Development Commands
 
@@ -16,6 +16,7 @@ Use Node.js 22 or newer.
 - `npm run preview`: serve the production build locally, normally on port 4173.
 - `npm test`: run Vitest tests with React Testing Library and jsdom.
 - `node tests/browser.mjs`: run Playwright checks using installed Google Chrome; requires preview running at `http://127.0.0.1:4173`. Screenshots go to `.artifacts/`.
+- `node tests/prepare-assets.mjs`: encode source photography as WebP with Chrome.
 
 ## Coding Style & Naming Conventions
 
@@ -23,7 +24,7 @@ Use strict TypeScript, explicit prop types, functional React components, and hoo
 
 ## Testing Guidelines
 
-Name component tests `*.test.tsx` under `src/`. Add focused behavioral coverage for changed interactions; no numerical coverage threshold is configured. Verify slice-to-video mapping, playback cleanup, watched persistence, and error states. For visual or interaction changes, also check desktop/mobile layouts, drag versus click, keyboard focus, reduced motion, and WebGL fallback. Run tests and the production build before submitting.
+Name component tests `*.test.tsx` under `src/`. Add focused behavioral coverage for changed interactions; no numerical coverage threshold is configured. Verify slice-to-video mapping, playback cleanup, watched persistence, and error states. For visual or interaction changes, check common laptop sizes, drag versus click, keyboard focus, reduced motion, the laptop-only notice, and WebGL fallback. Run tests and the production build before submitting.
 
 ## Commit & Pull Request Guidelines
 

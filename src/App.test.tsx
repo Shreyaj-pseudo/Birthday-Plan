@@ -4,10 +4,11 @@ import App from './App';
 import { birthday } from './content';
 import { VideoPlayer } from './VideoPlayer';
 vi.mock('./Cake', () => ({ default: () => <div>3D cake</div> }));
-beforeEach(() => { cleanup(); localStorage.clear(); window.matchMedia = vi.fn().mockReturnValue({matches:false,addEventListener:vi.fn(),removeEventListener:vi.fn()}); vi.spyOn(HTMLMediaElement.prototype,'pause').mockImplementation(() => {}); });
+beforeEach(() => { cleanup(); localStorage.clear(); window.matchMedia = vi.fn().mockImplementation((query: string) => ({matches:query.includes('reduced-motion'),addEventListener:vi.fn(),removeEventListener:vi.fn()})); vi.spyOn(HTMLMediaElement.prototype,'pause').mockImplementation(() => {}); });
 describe('birthday experience', () => {
   it('opens every slice with its matching friend and flavor', async () => {
     render(<App/>); fireEvent.click(screen.getByText('Explore your cake'));
+    for (const s of birthday.slices) expect(screen.queryByText(s.friend, { exact: true })).toBeNull();
     for (const s of birthday.slices) {
       fireEvent.click(screen.getByRole('button',{name:new RegExp(s.flavor)}));
       expect(screen.getByRole('heading',{name:s.flavor})).toBeTruthy();
@@ -16,7 +17,7 @@ describe('birthday experience', () => {
     }
     expect(birthday.slices).toHaveLength(9);
     expect(new Set(birthday.slices.map(s => s.id)).size).toBe(9);
-    await waitFor(() => expect(screen.queryByRole('region',{name:'Blueberry cheesecake'})).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('region',{name:'Earl Grey tart'})).toBeNull());
   });
   it('handles missing, failed, finished and replaced videos, pausing on replacement and unmount', () => {
     const ended = vi.fn();

@@ -1,41 +1,25 @@
 # Nine slices
 
-A local birthday experience: an opening video dedication, followed by nine interactive 3D cake slices and the friends’ stories behind them.
+A birthday website for a laptop presentation: a candlelit introduction, your video message, and an interactive cake assembled from nine friends' chosen slices. Every wedge can open its friend's video. The site runs locally and has no backend or external runtime assets.
 
-## Run
+## Run it
 
-Install Node.js 22 or newer, then run `npm install` and `npm run dev`. Open the localhost address printed in the terminal.
+Use Node.js 22 or newer. Run `npm ci` followed by `npm run dev`, then open the local address printed in the terminal. To present the production build, run `npm run build` and `npm run preview`; keep the terminal open. Do not open `dist/index.html` directly. The site can be presented offline once dependencies are installed and it has been built.
 
-For the birthday, run `npm run build`, then `npm run preview`. Keep the terminal open during the presentation. The built site uses only local assets and works without an internet connection. It must be served through localhost; opening `dist/index.html` directly is not supported.
+The presentation is designed for a laptop screen wider than 900 pixels. Smaller screens show a laptop notice.
 
-## Add your content
+## Add the real names and videos
 
-Edit `src/content.ts`. Set `birthday.recipient` to her name. Put your opening video in `public/videos/intro.mp4` and set `birthday.intro.video` to `/videos/intro.mp4`.
+Edit `src/content.ts`. Set `birthday.recipient` to her name and set `birthday.intro.video` to the local path of your birthday message, such as `/videos/intro.mp4`.
 
-Each of the nine slice entries has an editable friend name, flavor, video path, optional poster image, and appearance. The last argument in each sample `slice(...)` call sets the placeholder friend number. You can replace the generated entries with explicit objects, or change the helper to accept your friend names and video paths. For example:
+Add each friend's video to `public/videos/` and update that slice's `video` argument. The complete filename guide is in `public/videos/README.md`. All nine flavors and friend names are configured; video fields stay empty until the actual files arrive, so the site shows its intentional placeholder instead of requesting a missing file. For example, `public/videos/red-velvet-diya.mp4` is connected by changing Diya's video argument to `/videos/red-velvet-diya.mp4`.
 
-```ts
-{
-  id: 'red-velvet',
-  friend: 'Actual friend name',
-  flavor: 'Red velvet',
-  video: '/videos/red-velvet.mp4',
-  poster: '/videos/red-velvet.jpg', // optional
-  appearance: {
-    sponge: '#882f35', filling: '#f7e5ce', frosting: '#f7e5ce',
-    topping: 'berries', accent: '#a52c3c',
-  },
-}
-```
+Keep exactly nine slices and stable IDs because watched progress is stored by ID in the browser. The site shows intentional placeholders for videos that have not arrived. Use MP4 with H.264 video and AAC audio for broad browser support. Test the actual files and sound on the presentation laptop before the birthday. Videos do not autoplay, and a watched marker appears only after playback finishes. The reset button clears watched progress for rehearsals.
 
-Start with your existing red velvet and nutty chocolate videos. The seven other flavors and all friend names are sample content. Keep exactly nine entries and keep their IDs stable, since watched progress uses those IDs. Available toppings: `berries`, `nuts`, `petals`, `chocolate`, `lemon`. Video paths are relative to `public`, so do not include `public` in the configured URL.
+## Visual assets
 
-Use browser-compatible MP4 files (H.264 video with AAC audio). Both portrait and landscape videos are shown uncropped. Leave a video path empty to show the intentional placeholder. A missing or unsupported file shows an error and retry button. Videos never autoplay. Rebuild after changing content or assets.
+`public/images/cake-top.webp` maps onto the nine individually clickable 3D wedge tops. The sponge and filling sides are generated as crisp layered materials so they remain stable while the cake rotates. The landing and cake scene use separate candlelit photographs in the same folder. These are AI-generated decorative assets and sample flavor imagery; they are not photos or messages from her friends. Source PNGs are kept under `assets/source-images/`. If you change a source image, run `node tests/prepare-assets.mjs` to re-encode the WebP assets.
 
-## Present and rehearse
+## Verify
 
-Explore in any order. Drag horizontally to rotate, click a slice or use the labeled buttons beneath the cake, and press Escape to close a message. A story counts as watched when playback ends. Watched progress stays in this browser; “Reset watched stories” clears it. “Your opening message” returns to your dedication. The mobile player is a dialog, and the slice buttons remain usable if WebGL is unavailable.
-
-Run `npm test` for interaction tests and `npm run build` for TypeScript and production checks. Before the birthday, play each real video on the presentation laptop, verify volume and codec support, and rehearse once with the internet disconnected. This version has no hosting, password, upload portal, or external services. Local fonts are bundled from Fontsource.
-
-With `npm run preview` running at port 4173 and Google Chrome installed, run `node tests/browser.mjs` for desktop/mobile browser checks, actual 3D click and drag checks, keyboard focus, and the WebGL fallback. Screenshots are saved in the ignored `.artifacts` directory. The browser check also verifies that the site requests no external assets.
+Run `npm test` for React interaction tests and `npm run build` for TypeScript and production checks. With the preview running on `http://127.0.0.1:4173` and Google Chrome installed, run `node tests/browser.mjs` for the laptop layout, cake click and drag, keyboard and video behavior, offline asset checks, and a fallback when WebGL is unavailable. Screenshots are saved in the ignored `.artifacts/` directory.
